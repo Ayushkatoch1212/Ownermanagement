@@ -1,0 +1,2 @@
+import { Chip } from "@mui/material";
+export default function StatusChip({status}:{status:string}){const color=status==="completed"||status==="active"||status==="available"?"success":status==="partial"||status==="partially_occupied"||status==="notice_period"?"warning":status==="pending"||status==="overdue"?"error":"default";return <Chip size="small" label={status.replaceAll("_"," ")} color={color as any} variant="outlined"/>}
