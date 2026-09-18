@@ -29,72 +29,137 @@ export default function Rooms() {
   const [v, setV] = useState<any>({
     pgId: "",
     roomNumber: "",
-    floor: 1,
-    capacity: 4,
-    monthlyRent: 10000,
+    floor: "1",
+    capacity: "4",
+    monthlyRent: "10000",
     electricityType: "meter",
-    electricityRate: 8,
-    fixedElectricity: 500,
+    electricityRate: "8",
+    fixedElectricity: "500",
   });
 
-  async function load() {
-    const response = await fetch(
-      "/api/rooms"
-    );
-
-    const result = await response.json();
-
-    setData(result.data || []);
+  // ---------------------------------------
+  // Reset form
+  // ---------------------------------------
+  function resetForm() {
+    setV({
+      pgId: "",
+      roomNumber: "",
+      floor: "1",
+      capacity: "4",
+      monthlyRent: "10000",
+      electricityType: "meter",
+      electricityRate: "8",
+      fixedElectricity: "500",
+    });
   }
 
+  // ---------------------------------------
+  // Load Rooms
+  // ---------------------------------------
+  async function load() {
+    try {
+      const response = await fetch("/api/rooms");
+
+      const result = await response.json();
+
+      setData(result.data || []);
+    } catch (error) {
+      console.error("LOAD ROOMS ERROR:", error);
+    }
+  }
+
+  // ---------------------------------------
+  // Load data
+  // ---------------------------------------
   useEffect(() => {
     load();
 
     fetch("/api/pgs")
       .then((r) => r.json())
-      .then((x) => setPgs(x.data || []));
+      .then((x) => setPgs(x.data || []))
+      .catch((error) => {
+        console.error("LOAD PG ERROR:", error);
+      });
   }, []);
 
+  // ---------------------------------------
+  // Numeric input handler
+  // ---------------------------------------
+  function handleNumberChange(
+    field:
+      | "floor"
+      | "capacity"
+      | "monthlyRent"
+      | "electricityRate"
+      | "fixedElectricity",
+    value: string
+  ) {
+    // Allow numbers only
+    const numericValue = value.replace(/\D/g, "");
+
+    setV((prev: any) => ({
+      ...prev,
+      [field]: numericValue,
+    }));
+  }
+
+  // ---------------------------------------
+  // Save Room
+  // ---------------------------------------
   async function save() {
-    if (
-      !v.pgId ||
-      !v.roomNumber ||
-      !v.capacity
-    ) {
-      alert(
-        "PG, Room Number and Capacity are required."
-      );
+    if (!v.pgId || !v.roomNumber || !v.capacity) {
+      alert("PG, Room Number and Capacity are required.");
       return;
     }
 
-    const response = await fetch(
-      "/api/rooms",
-      {
+    const payload = {
+      ...v,
+
+      floor: Number(v.floor || 0),
+      capacity: Number(v.capacity || 0),
+      monthlyRent: Number(v.monthlyRent || 0),
+      electricityRate: Number(v.electricityRate || 0),
+      fixedElectricity: Number(v.fixedElectricity || 0),
+    };
+
+    try {
+      const response = await fetch("/api/rooms", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(v),
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(result.message || "Unable to create room.");
+        return;
       }
-    );
 
-    const result = await response.json();
+      setOpen(false);
 
-    if (!response.ok) {
-      alert(result.message);
-      return;
+      resetForm();
+
+      load();
+    } catch (error) {
+      console.error("SAVE ROOM ERROR:", error);
+
+      alert("Unable to create room. Please try again.");
     }
-
-    setOpen(false);
-    load();
   }
 
   return (
     <Box>
+      {/* ---------------------------------------
+          Header
+      --------------------------------------- */}
       <Box
         sx={{
           display: "flex",
           justifyContent: "space-between",
+          alignItems: "center",
           mb: 3,
         }}
       >
@@ -115,12 +180,18 @@ export default function Rooms() {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            resetForm();
+            setOpen(true);
+          }}
         >
           Add Room
         </Button>
       </Box>
 
+      {/* ---------------------------------------
+          Room Cards
+      --------------------------------------- */}
       <Grid container spacing={2}>
         {data.map((r) => (
           <Grid
@@ -136,8 +207,8 @@ export default function Rooms() {
                 <Box
                   sx={{
                     display: "flex",
-                    justifyContent:
-                      "space-between",
+                    justifyContent: "space-between",
+                    alignItems: "center",
                   }}
                 >
                   <Typography
@@ -147,9 +218,7 @@ export default function Rooms() {
                     Room {r.roomNumber}
                   </Typography>
 
-                  <StatusChip
-                    status={r.status}
-                  />
+                  <StatusChip status={r.status} />
                 </Box>
 
                 <Typography color="text.secondary">
@@ -160,8 +229,7 @@ export default function Rooms() {
                 <Typography sx={{ mt: 2 }}>
                   Occupancy{" "}
                   <b>
-                    {r.occupied || 0}/
-                    {r.capacity}
+                    {r.occupied || 0}/{r.capacity}
                   </b>
                 </Typography>
 
@@ -178,11 +246,9 @@ export default function Rooms() {
                   sx={{ mt: 1 }}
                 >
                   Electricity:{" "}
-                  {r.electricityType ===
-                  "meter"
+                  {r.electricityType === "meter"
                     ? `₹${r.electricityRate || 0}/unit`
-                    : r.electricityType ===
-                      "fixed"
+                    : r.electricityType === "fixed"
                     ? `₹${r.fixedElectricity || 0} fixed`
                     : "Included"}
                 </Typography>
@@ -192,9 +258,15 @@ export default function Rooms() {
         ))}
       </Grid>
 
+      {/* ---------------------------------------
+          Add Room Dialog
+      --------------------------------------- */}
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          resetForm();
+        }}
         fullWidth
         maxWidth="sm"
       >
@@ -209,6 +281,7 @@ export default function Rooms() {
             pt: 2,
           }}
         >
+          {/* PG */}
           <TextField
             select
             label="PG"
@@ -219,6 +292,7 @@ export default function Rooms() {
                 pgId: e.target.value,
               })
             }
+            fullWidth
           >
             {pgs.map((p) => (
               <MenuItem
@@ -230,6 +304,7 @@ export default function Rooms() {
             ))}
           </TextField>
 
+          {/* Room Number */}
           <TextField
             label="Room Number"
             value={v.roomNumber}
@@ -239,52 +314,78 @@ export default function Rooms() {
                 roomNumber: e.target.value,
               })
             }
+            fullWidth
           />
 
+          {/* ---------------------------------------
+              Floor
+              Normal text input - NO spinner
+          --------------------------------------- */}
           <TextField
             label="Floor"
-            type="number"
+            type="text"
             value={v.floor}
+            placeholder="Enter floor number"
+            inputProps={{
+              inputMode: "numeric",
+              pattern: "[0-9]*",
+            }}
             onChange={(e) =>
-              setV({
-                ...v,
-                floor: Number(
-                  e.target.value
-                ),
-              })
+              handleNumberChange(
+                "floor",
+                e.target.value
+              )
             }
+            fullWidth
           />
 
+          {/* ---------------------------------------
+              Maximum Occupancy
+              Normal text input - NO spinner
+          --------------------------------------- */}
           <TextField
             label="Maximum Occupancy"
-            type="number"
+            type="text"
             value={v.capacity}
+            placeholder="Enter maximum occupancy"
+            inputProps={{
+              inputMode: "numeric",
+              pattern: "[0-9]*",
+            }}
             onChange={(e) =>
-              setV({
-                ...v,
-                capacity: Number(
-                  e.target.value
-                ),
-              })
+              handleNumberChange(
+                "capacity",
+                e.target.value
+              )
             }
             helperText="Example: 4 students"
+            fullWidth
           />
 
+          {/* ---------------------------------------
+              Room Monthly Rent
+              Normal text input - NO spinner
+          --------------------------------------- */}
           <TextField
             label="Room Monthly Rent"
-            type="number"
+            type="text"
             value={v.monthlyRent}
+            placeholder="Enter room rent"
+            inputProps={{
+              inputMode: "numeric",
+              pattern: "[0-9]*",
+            }}
             onChange={(e) =>
-              setV({
-                ...v,
-                monthlyRent: Number(
-                  e.target.value
-                ),
-              })
+              handleNumberChange(
+                "monthlyRent",
+                e.target.value
+              )
             }
             helperText="This is the total rent for the room."
+            fullWidth
           />
 
+          {/* Electricity Type */}
           <TextField
             select
             label="Electricity Type"
@@ -296,6 +397,7 @@ export default function Rooms() {
                   e.target.value,
               })
             }
+            fullWidth
           >
             <MenuItem value="fixed">
               Fixed
@@ -310,46 +412,64 @@ export default function Rooms() {
             </MenuItem>
           </TextField>
 
-          {v.electricityType ===
-            "fixed" && (
+          {/* ---------------------------------------
+              Fixed Electricity
+              Normal text input - NO spinner
+          --------------------------------------- */}
+          {v.electricityType === "fixed" && (
             <TextField
               label="Fixed Electricity"
-              type="number"
+              type="text"
               value={v.fixedElectricity}
+              placeholder="Enter fixed electricity"
+              inputProps={{
+                inputMode: "numeric",
+                pattern: "[0-9]*",
+              }}
               onChange={(e) =>
-                setV({
-                  ...v,
-                  fixedElectricity:
-                    Number(
-                      e.target.value
-                    ),
-                })
+                handleNumberChange(
+                  "fixedElectricity",
+                  e.target.value
+                )
               }
+              fullWidth
             />
           )}
 
-          {v.electricityType ===
-            "meter" && (
+          {/* ---------------------------------------
+              Rate Per Unit
+              Normal text input - NO spinner
+          --------------------------------------- */}
+          {v.electricityType === "meter" && (
             <TextField
               label="Rate Per Unit"
-              type="number"
+              type="text"
               value={v.electricityRate}
+              placeholder="Enter rate per unit"
+              inputProps={{
+                inputMode: "numeric",
+                pattern: "[0-9]*",
+              }}
               onChange={(e) =>
-                setV({
-                  ...v,
-                  electricityRate:
-                    Number(
-                      e.target.value
-                    ),
-                })
+                handleNumberChange(
+                  "electricityRate",
+                  e.target.value
+                )
               }
+              fullWidth
             />
           )}
         </DialogContent>
 
+        {/* ---------------------------------------
+            Dialog Actions
+        --------------------------------------- */}
         <DialogActions>
           <Button
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setOpen(false);
+              resetForm();
+            }}
           >
             Cancel
           </Button>

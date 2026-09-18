@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import { useRouter } from "next/navigation";
 import { Animated } from "@/components/Animated";
+import Link from "next/link";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -133,6 +134,22 @@ export default function Login() {
               {loading ? "Signing in..." : "Sign in"}
             </Button>
           </Box>
+          <Box
+  sx={{
+    display: "flex",
+    justifyContent: "flex-end",
+  }}
+>
+  <Link
+    href="/forgot-password"
+    style={{
+      textDecoration: "none",
+      fontSize: "14px",
+    }}
+  >
+    Forgot Password?
+  </Link>
+</Box>
 
           <Typography
             sx={{ mt: 3 }}

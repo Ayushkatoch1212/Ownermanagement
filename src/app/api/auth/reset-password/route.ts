@@ -5,36 +5,27 @@ import { connectDB } from "@/lib/db";
 import User from "@/models/User";
 
 import {
-  generateOtp,
   hashOtp,
 } from "@/lib/otp";
-
-import {
-  sendVerificationOtpEmail,
-} from "@/lib/mailer";
 
 export async function POST(
   request: Request
 ) {
   try {
-    const body = await request.json();
-
     const {
-      name,
       email,
-      phone,
+      otp,
       password,
       confirmPassword,
-    } = body;
+    } = await request.json();
 
     // --------------------------------
     // Validation
     // --------------------------------
 
     if (
-      !name ||
       !email ||
-      !phone ||
+      !otp ||
       !password ||
       !confirmPassword
     ) {
@@ -78,113 +69,107 @@ export async function POST(
       email.toLowerCase().trim();
 
     // --------------------------------
-    // Check existing user
+    // Find user
     // --------------------------------
 
-    const existingUser =
+    const user =
       await User.findOne({
         email: normalizedEmail,
-      });
+      }).select(
+        "+passwordResetOtp +passwordResetOtpExpires"
+      );
 
-    if (existingUser) {
+    if (!user) {
       return NextResponse.json(
         {
           success: false,
           message:
-            "An account with this email already exists",
+            "Invalid email or OTP",
         },
-        { status: 409 }
+        { status: 400 }
       );
     }
 
     // --------------------------------
-    // Hash password
+    // Check OTP expiry
+    // --------------------------------
+
+    if (
+      !user.passwordResetOtpExpires ||
+      new Date() >
+        new Date(
+          user.passwordResetOtpExpires
+        )
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "OTP has expired. Please request a new OTP.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // --------------------------------
+    // Compare OTP
+    // --------------------------------
+
+    const hashedOtp =
+      hashOtp(String(otp));
+
+    if (
+      hashedOtp !==
+      user.passwordResetOtp
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Invalid OTP",
+        },
+        { status: 400 }
+      );
+    }
+
+    // --------------------------------
+    // Hash new password
     // --------------------------------
 
     const hashedPassword =
-      await bcrypt.hash(password, 12);
-
-    // --------------------------------
-    // Generate OTP
-    // --------------------------------
-
-    const otp = generateOtp();
-
-    const hashedOtp =
-      hashOtp(otp);
-
-    const otpExpires =
-      new Date(
-        Date.now() +
-          10 * 60 * 1000
+      await bcrypt.hash(
+        password,
+        12
       );
 
     // --------------------------------
-    // Create user
+    // Update password
     // --------------------------------
 
-    await User.create({
-      name: name.trim(),
+    user.password =
+      hashedPassword;
 
-      email: normalizedEmail,
+    // Make sure the account remains
+    // verified.
+    user.isEmailVerified = true;
 
-      phone: phone.trim(),
+    // Remove OTP
+    user.passwordResetOtp =
+      null;
 
-      password: hashedPassword,
+    user.passwordResetOtpExpires =
+      null;
 
-      role: "admin",
+    await user.save();
 
-      isEmailVerified: false,
-
-      emailVerificationOtp:
-        hashedOtp,
-
-      emailVerificationOtpExpires:
-        otpExpires,
+    return NextResponse.json({
+      success: true,
+      message:
+        "Password reset successfully",
     });
-
-    // --------------------------------
-    // Send OTP
-    // --------------------------------
-
-    try {
-      await sendVerificationOtpEmail(
-        normalizedEmail,
-        otp
-      );
-    } catch (emailError) {
-      console.error(
-        "REGISTRATION EMAIL ERROR:",
-        emailError
-      );
-
-      // Remove user if email couldn't
-      // be sent.
-      await User.deleteOne({
-        email: normalizedEmail,
-      });
-
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Unable to send verification email. Please try again.",
-        },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: true,
-        message:
-          "Registration successful. OTP sent to your email.",
-      },
-      { status: 201 }
-    );
   } catch (error: any) {
     console.error(
-      "REGISTER ERROR:",
+      "RESET PASSWORD ERROR:",
       error
     );
 
@@ -192,8 +177,7 @@ export async function POST(
       {
         success: false,
         message:
-          error?.message ||
-          "Unable to register",
+          "Unable to reset password",
       },
       { status: 500 }
     );

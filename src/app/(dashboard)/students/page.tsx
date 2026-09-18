@@ -41,76 +41,21 @@ export default function Students() {
     guardianName: "",
     guardianPhone: "",
     college: "",
-    joiningDate: new Date()
-      .toISOString()
-      .slice(0, 10),
+    joiningDate: new Date().toISOString().slice(0, 10),
 
-    monthlyRent: 7000,
+    monthlyRent: "7000",
 
-    securityDeposit: 7000,
-    securityDepositPaid: 0,
+    securityDeposit: "7000",
+    securityDepositPaid: "0",
 
     status: "active",
     notes: "",
   });
 
-  async function load() {
-    const response = await fetch(
-      "/api/students"
-    );
-
-    const result = await response.json();
-
-    setData(result.data || []);
-  }
-
-  useEffect(() => {
-    load();
-
-    fetch("/api/pgs")
-      .then((r) => r.json())
-      .then((x) => setPgs(x.data || []));
-
-    fetch("/api/rooms")
-      .then((r) => r.json())
-      .then((x) => setRooms(x.data || []));
-  }, []);
-
-  const roomOptions = rooms.filter(
-    (r) =>
-      !v.pgId ||
-      String(r.pgId?._id || r.pgId) ===
-        String(v.pgId)
-  );
-
-  async function save() {
-    if (!v.pgId || !v.roomId || !v.name || !v.phone) {
-      alert(
-        "PG, Room, Name and Phone are required."
-      );
-      return;
-    }
-
-    const response = await fetch(
-      "/api/students",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(v),
-      }
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      alert(result.message);
-      return;
-    }
-
-    setOpen(false);
-
+  // ---------------------------------------
+  // Reset form
+  // ---------------------------------------
+  function resetForm() {
     setV({
       pgId: "",
       roomId: "",
@@ -121,25 +66,166 @@ export default function Students() {
       guardianName: "",
       guardianPhone: "",
       college: "",
-      joiningDate: new Date()
-        .toISOString()
-        .slice(0, 10),
-      monthlyRent: 7000,
-      securityDeposit: 7000,
-      securityDepositPaid: 0,
+      joiningDate: new Date().toISOString().slice(0, 10),
+
+      monthlyRent: "7000",
+
+      securityDeposit: "7000",
+      securityDepositPaid: "0",
+
       status: "active",
       notes: "",
     });
+  }
 
+  // ---------------------------------------
+  // Load Students
+  // ---------------------------------------
+  async function load() {
+    try {
+      const response = await fetch("/api/students");
+
+      const result = await response.json();
+
+      setData(result.data || []);
+    } catch (error) {
+      console.error("LOAD STUDENTS ERROR:", error);
+    }
+  }
+
+  // ---------------------------------------
+  // Initial Load
+  // ---------------------------------------
+  useEffect(() => {
     load();
+
+    fetch("/api/pgs")
+      .then((r) => r.json())
+      .then((x) => setPgs(x.data || []))
+      .catch((error) => {
+        console.error("LOAD PG ERROR:", error);
+      });
+
+    fetch("/api/rooms")
+      .then((r) => r.json())
+      .then((x) => setRooms(x.data || []))
+      .catch((error) => {
+        console.error("LOAD ROOMS ERROR:", error);
+      });
+  }, []);
+
+  // ---------------------------------------
+  // Filter rooms according to selected PG
+  // ---------------------------------------
+  const roomOptions = rooms.filter(
+    (r) =>
+      !v.pgId ||
+      String(r.pgId?._id || r.pgId) ===
+        String(v.pgId)
+  );
+
+  // ---------------------------------------
+  // Numeric input handler
+  // ---------------------------------------
+  function handleNumberChange(
+    field:
+      | "monthlyRent"
+      | "securityDeposit"
+      | "securityDepositPaid",
+    value: string
+  ) {
+    // Allow numbers only
+    const numericValue = value.replace(/\D/g, "");
+
+    setV((prev: any) => ({
+      ...prev,
+      [field]: numericValue,
+    }));
+  }
+
+  // ---------------------------------------
+  // Save Student
+  // ---------------------------------------
+  async function save() {
+    if (
+      !v.pgId ||
+      !v.roomId ||
+      !v.name ||
+      !v.phone
+    ) {
+      alert(
+        "PG, Room, Name and Phone are required."
+      );
+
+      return;
+    }
+
+    const payload = {
+      ...v,
+
+      monthlyRent: Number(v.monthlyRent || 0),
+
+      securityDeposit: Number(
+        v.securityDeposit || 0
+      ),
+
+      securityDepositPaid: Number(
+        v.securityDepositPaid || 0
+      ),
+    };
+
+    try {
+      const response = await fetch(
+        "/api/students",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(
+          result.message ||
+            "Unable to create student."
+        );
+
+        return;
+      }
+
+      setOpen(false);
+
+      resetForm();
+
+      load();
+    } catch (error) {
+      console.error(
+        "SAVE STUDENT ERROR:",
+        error
+      );
+
+      alert(
+        "Unable to create student. Please try again."
+      );
+    }
   }
 
   return (
     <Box>
+      {/* ---------------------------------------
+          Header
+      --------------------------------------- */}
       <Box
         sx={{
           display: "flex",
           justifyContent: "space-between",
+          alignItems: "center",
           mb: 3,
         }}
       >
@@ -160,12 +246,18 @@ export default function Students() {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            resetForm();
+            setOpen(true);
+          }}
         >
           Add Student
         </Button>
       </Box>
 
+      {/* ---------------------------------------
+          Students Table
+      --------------------------------------- */}
       <Card variant="outlined">
         <CardContent>
           <Table>
@@ -244,9 +336,15 @@ export default function Students() {
         </CardContent>
       </Card>
 
+      {/* ---------------------------------------
+          Add Student Dialog
+      --------------------------------------- */}
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          resetForm();
+        }}
         fullWidth
         maxWidth="md"
       >
@@ -265,6 +363,7 @@ export default function Students() {
             pt: 2,
           }}
         >
+          {/* PG */}
           <TextField
             select
             label="PG"
@@ -276,6 +375,7 @@ export default function Students() {
                 roomId: "",
               })
             }
+            fullWidth
           >
             {pgs.map((p) => (
               <MenuItem
@@ -287,6 +387,7 @@ export default function Students() {
             ))}
           </TextField>
 
+          {/* Room */}
           <TextField
             select
             label="Room"
@@ -297,6 +398,7 @@ export default function Students() {
                 roomId: e.target.value,
               })
             }
+            fullWidth
           >
             {roomOptions.map((r) => (
               <MenuItem
@@ -310,6 +412,7 @@ export default function Students() {
             ))}
           </TextField>
 
+          {/* Basic Information */}
           {[
             ["name", "Full name"],
             ["phone", "Phone"],
@@ -319,7 +422,10 @@ export default function Students() {
               "Registration number",
             ],
             ["guardianName", "Guardian name"],
-            ["guardianPhone", "Guardian phone"],
+            [
+              "guardianPhone",
+              "Guardian phone",
+            ],
             ["college", "College"],
           ].map(([key, label]) => (
             <TextField
@@ -332,9 +438,11 @@ export default function Students() {
                   [key]: e.target.value,
                 })
               }
+              fullWidth
             />
           ))}
 
+          {/* Joining Date */}
           <TextField
             type="date"
             label="Joining date"
@@ -348,51 +456,77 @@ export default function Students() {
                 joiningDate: e.target.value,
               })
             }
+            fullWidth
           />
 
+          {/* ---------------------------------------
+              Monthly Rent
+              Normal text input - NO spinner
+          --------------------------------------- */}
           <TextField
-            type="number"
+            type="text"
             label="Monthly Rent"
             value={v.monthlyRent}
+            placeholder="Enter monthly rent"
+            inputProps={{
+              inputMode: "numeric",
+              pattern: "[0-9]*",
+            }}
             onChange={(e) =>
-              setV({
-                ...v,
-                monthlyRent: Number(
-                  e.target.value
-                ),
-              })
+              handleNumberChange(
+                "monthlyRent",
+                e.target.value
+              )
             }
             helperText="Stored for student reference. Room billing uses the room rent."
+            fullWidth
           />
 
+          {/* ---------------------------------------
+              Security Deposit
+              Normal text input - NO spinner
+          --------------------------------------- */}
           <TextField
-            type="number"
+            type="text"
             label="Security Deposit"
             value={v.securityDeposit}
+            placeholder="Enter security deposit"
+            inputProps={{
+              inputMode: "numeric",
+              pattern: "[0-9]*",
+            }}
             onChange={(e) =>
-              setV({
-                ...v,
-                securityDeposit: Number(
-                  e.target.value
-                ),
-              })
+              handleNumberChange(
+                "securityDeposit",
+                e.target.value
+              )
             }
+            fullWidth
           />
 
+          {/* ---------------------------------------
+              Deposit Paid
+              Normal text input - NO spinner
+          --------------------------------------- */}
           <TextField
-            type="number"
+            type="text"
             label="Deposit Paid"
             value={v.securityDepositPaid}
+            placeholder="Enter amount paid"
+            inputProps={{
+              inputMode: "numeric",
+              pattern: "[0-9]*",
+            }}
             onChange={(e) =>
-              setV({
-                ...v,
-                securityDepositPaid: Number(
-                  e.target.value
-                ),
-              })
+              handleNumberChange(
+                "securityDepositPaid",
+                e.target.value
+              )
             }
+            fullWidth
           />
 
+          {/* Notes */}
           <TextField
             label="Notes"
             value={v.notes}
@@ -403,12 +537,20 @@ export default function Students() {
               })
             }
             multiline
+            minRows={2}
+            fullWidth
           />
         </DialogContent>
 
+        {/* ---------------------------------------
+            Dialog Actions
+        --------------------------------------- */}
         <DialogActions>
           <Button
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setOpen(false);
+              resetForm();
+            }}
           >
             Cancel
           </Button>

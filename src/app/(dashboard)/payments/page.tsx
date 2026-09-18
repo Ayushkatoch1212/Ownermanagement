@@ -28,57 +28,62 @@ import { money } from "@/lib/utils";
 export default function Payments() {
   const now = new Date();
 
-  const [data, setData] =
-    useState<any[]>([]);
+  const [data, setData] = useState<any[]>([]);
+  const [billingData, setBillingData] = useState<any[]>([]);
+  const [open, setOpen] = useState(false);
 
-  const [billingData, setBillingData] =
-    useState<any[]>([]);
-
-  const [open, setOpen] =
-    useState(false);
-
-  const [month, setMonth] =
-    useState(
-      `${now.getFullYear()}-${String(
-        now.getMonth() + 1
-      ).padStart(2, "0")}`
-    );
+  const [month, setMonth] = useState(
+    `${now.getFullYear()}-${String(
+      now.getMonth() + 1
+    ).padStart(2, "0")}`
+  );
 
   const [v, setV] = useState<any>({
     roomId: "",
     billId: "",
-    amount: 0,
+    amount: "",
     paymentMethod: "cash",
-    paymentDate: now
-      .toISOString()
-      .slice(0, 10),
+    paymentDate: now.toISOString().slice(0, 10),
     notes: "",
   });
 
+  // ---------------------------------------
+  // Load Payments
+  // ---------------------------------------
   async function loadPayments() {
-    const response = await fetch(
-      `/api/payments?billingMonth=${month}`
-    );
+    try {
+      const response = await fetch(
+        `/api/payments?billingMonth=${month}`
+      );
 
-    const result =
-      await response.json();
+      const result = await response.json();
 
-    setData(result.data || []);
+      setData(result.data || []);
+    } catch (error) {
+      console.error("LOAD PAYMENTS ERROR:", error);
+    }
   }
 
+  // ---------------------------------------
+  // Load Billing
+  // ---------------------------------------
   async function loadBilling() {
-    const response = await fetch(
-      `/api/billing?month=${month}`
-    );
+    try {
+      const response = await fetch(
+        `/api/billing?month=${month}`
+      );
 
-    const result =
-      await response.json();
+      const result = await response.json();
 
-    setBillingData(
-      result.data || []
-    );
+      setBillingData(result.data || []);
+    } catch (error) {
+      console.error("LOAD BILLING ERROR:", error);
+    }
   }
 
+  // ---------------------------------------
+  // Load All
+  // ---------------------------------------
   async function load() {
     await Promise.all([
       loadPayments(),
@@ -90,12 +95,29 @@ export default function Payments() {
     load();
   }, [month]);
 
-  const selectedRoom =
-    billingData.find(
-      (x) =>
-        x.room._id === v.roomId
-    );
+  // ---------------------------------------
+  // Selected Room
+  // ---------------------------------------
+  const selectedRoom = billingData.find(
+    (x) => x.room._id === v.roomId
+  );
 
+  // ---------------------------------------
+  // Numeric Input Handler
+  // ---------------------------------------
+  function handleAmountChange(value: string) {
+    // Allow numbers only
+    const numericValue = value.replace(/\D/g, "");
+
+    setV((prev: any) => ({
+      ...prev,
+      amount: numericValue,
+    }));
+  }
+
+  // ---------------------------------------
+  // Save Payment
+  // ---------------------------------------
   async function save() {
     if (!v.roomId) {
       alert("Select a room.");
@@ -110,9 +132,7 @@ export default function Payments() {
     }
 
     if (Number(v.amount) <= 0) {
-      alert(
-        "Enter a valid payment amount."
-      );
+      alert("Enter a valid payment amount.");
       return;
     }
 
@@ -120,70 +140,85 @@ export default function Payments() {
       selectedRoom?.bill &&
       Number(v.amount) >
         Number(
-          selectedRoom.bill
-            .remainingAmount
+          selectedRoom.bill.remainingAmount
         )
     ) {
       alert(
         `Maximum payable amount is ${money(
-          selectedRoom.bill
-            .remainingAmount
+          selectedRoom.bill.remainingAmount
         )}`
       );
+
       return;
     }
 
-    const response = await fetch(
-      "/api/payments",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json",
-        },
-        body: JSON.stringify({
-          roomId: v.roomId,
-          billId: v.billId,
-          billingMonth: month,
-          amount: Number(v.amount),
-          paymentMethod:
-            v.paymentMethod,
-          paymentDate:
-            v.paymentDate,
-          notes: v.notes,
-        }),
+    try {
+      const response = await fetch(
+        "/api/payments",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            roomId: v.roomId,
+            billId: v.billId,
+            billingMonth: month,
+            amount: Number(v.amount),
+            paymentMethod: v.paymentMethod,
+            paymentDate: v.paymentDate,
+            notes: v.notes,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(
+          result.message ||
+            "Unable to save payment."
+        );
+
+        return;
       }
-    );
 
-    const result =
-      await response.json();
+      setOpen(false);
 
-    if (!response.ok) {
-      alert(result.message);
-      return;
+      setV({
+        roomId: "",
+        billId: "",
+        amount: "",
+        paymentMethod: "cash",
+        paymentDate: new Date()
+          .toISOString()
+          .slice(0, 10),
+        notes: "",
+      });
+
+      load();
+    } catch (error) {
+      console.error(
+        "SAVE PAYMENT ERROR:",
+        error
+      );
+
+      alert(
+        "Unable to save payment. Please try again."
+      );
     }
-
-    setOpen(false);
-
-    setV({
-      roomId: "",
-      billId: "",
-      amount: 0,
-      paymentMethod: "cash",
-      paymentDate: now
-        .toISOString()
-        .slice(0, 10),
-      notes: "",
-    });
-
-    load();
   }
 
+  // ---------------------------------------
+  // Open Payment Dialog
+  // ---------------------------------------
   function openPaymentDialog() {
     setV({
       roomId: "",
       billId: "",
-      amount: 0,
+      amount: "",
       paymentMethod: "cash",
       paymentDate: new Date()
         .toISOString()
@@ -196,11 +231,14 @@ export default function Payments() {
 
   return (
     <Box>
+      {/* ---------------------------------------
+          Header
+      --------------------------------------- */}
       <Box
         sx={{
           display: "flex",
-          justifyContent:
-            "space-between",
+          justifyContent: "space-between",
+          alignItems: "center",
           mb: 3,
         }}
       >
@@ -213,24 +251,23 @@ export default function Payments() {
           </Typography>
 
           <Typography color="text.secondary">
-            Record payments against a
-            room's monthly bill.
+            Record payments against a room's
+            monthly bill.
           </Typography>
         </Box>
 
         <Button
           variant="contained"
-          startIcon={
-            <AddIcon />
-          }
-          onClick={
-            openPaymentDialog
-          }
+          startIcon={<AddIcon />}
+          onClick={openPaymentDialog}
         >
           Record Payment
         </Button>
       </Box>
 
+      {/* ---------------------------------------
+          Payment List
+      --------------------------------------- */}
       <Card variant="outlined">
         <CardContent>
           <TextField
@@ -241,9 +278,7 @@ export default function Payments() {
             }}
             value={month}
             onChange={(e) =>
-              setMonth(
-                e.target.value
-              )
+              setMonth(e.target.value)
             }
             sx={{ mb: 3 }}
           />
@@ -275,15 +310,10 @@ export default function Payments() {
 
             <TableBody>
               {data.map((p) => (
-                <TableRow
-                  key={p._id}
-                >
+                <TableRow key={p._id}>
                   <TableCell>
                     Room{" "}
-                    {
-                      p.roomId
-                        ?.roomNumber
-                    }
+                    {p.roomId?.roomNumber}
                   </TableCell>
 
                   <TableCell>
@@ -297,9 +327,7 @@ export default function Payments() {
                   </TableCell>
 
                   <TableCell>
-                    {money(
-                      p.amount
-                    )}
+                    {money(p.amount)}
                   </TableCell>
 
                   <TableCell>
@@ -312,15 +340,14 @@ export default function Payments() {
                 </TableRow>
               ))}
 
-              {data.length ===
-                0 && (
+              {data.length === 0 && (
                 <TableRow>
                   <TableCell
                     colSpan={5}
                     align="center"
                   >
-                    No payments found
-                    for this month.
+                    No payments found for this
+                    month.
                   </TableCell>
                 </TableRow>
               )}
@@ -329,11 +356,12 @@ export default function Payments() {
         </CardContent>
       </Card>
 
+      {/* ---------------------------------------
+          Payment Dialog
+      --------------------------------------- */}
       <Dialog
         open={open}
-        onClose={() =>
-          setOpen(false)
-        }
+        onClose={() => setOpen(false)}
         fullWidth
         maxWidth="sm"
       >
@@ -348,62 +376,48 @@ export default function Payments() {
             pt: 2,
           }}
         >
+          {/* Room */}
           <TextField
             select
             label="Room"
             value={v.roomId}
             onChange={(e) => {
-              const room =
-                billingData.find(
-                  (x) =>
-                    x.room._id ===
-                    e.target.value
-                );
+              const room = billingData.find(
+                (x) =>
+                  x.room._id ===
+                  e.target.value
+              );
 
               setV({
                 ...v,
-                roomId:
-                  e.target.value,
+                roomId: e.target.value,
                 billId:
-                  room?.bill?._id ||
-                  "",
-                amount: 0,
+                  room?.bill?._id || "",
+                amount: "",
               });
             }}
+            fullWidth
           >
-            {billingData.map(
-              (r) => (
-                <MenuItem
-                  key={
-                    r.room._id
-                  }
-                  value={
-                    r.room._id
-                  }
-                  disabled={
-                    !r.bill ||
-                    Number(
-                      r.bill
-                        .remainingAmount
-                    ) <= 0
-                  }
-                >
-                  Room{" "}
-                  {
-                    r.room
-                      .roomNumber
-                  }{" "}
-                  · Due{" "}
-                  {money(
-                    r.bill
-                      ?.remainingAmount ||
-                      0
-                  )}
-                </MenuItem>
-              )
-            )}
+            {billingData.map((r) => (
+              <MenuItem
+                key={r.room._id}
+                value={r.room._id}
+                disabled={
+                  !r.bill ||
+                  Number(
+                    r.bill.remainingAmount
+                  ) <= 0
+                }
+              >
+                Room {r.room.roomNumber} · Due{" "}
+                {money(
+                  r.bill?.remainingAmount || 0
+                )}
+              </MenuItem>
+            ))}
           </TextField>
 
+          {/* Selected Room Bill */}
           {selectedRoom && (
             <Card
               variant="outlined"
@@ -413,10 +427,8 @@ export default function Payments() {
                 Room Rent:{" "}
                 <b>
                   {money(
-                    selectedRoom
-                      .bill
-                      ?.rentAmount ||
-                      0
+                    selectedRoom.bill
+                      ?.rentAmount || 0
                   )}
                 </b>
               </Typography>
@@ -425,10 +437,8 @@ export default function Payments() {
                 Electricity:{" "}
                 <b>
                   {money(
-                    selectedRoom
-                      .bill
-                      ?.electricityAmount ||
-                      0
+                    selectedRoom.bill
+                      ?.electricityAmount || 0
                   )}
                 </b>
               </Typography>
@@ -437,10 +447,8 @@ export default function Payments() {
                 Total:{" "}
                 <b>
                   {money(
-                    selectedRoom
-                      .bill
-                      ?.totalAmount ||
-                      0
+                    selectedRoom.bill
+                      ?.totalAmount || 0
                   )}
                 </b>
               </Typography>
@@ -449,10 +457,8 @@ export default function Payments() {
                 Paid:{" "}
                 <b>
                   {money(
-                    selectedRoom
-                      .bill
-                      ?.amountPaid ||
-                      0
+                    selectedRoom.bill
+                      ?.amountPaid || 0
                   )}
                 </b>
               </Typography>
@@ -461,39 +467,43 @@ export default function Payments() {
                 Remaining:{" "}
                 <b>
                   {money(
-                    selectedRoom
-                      .bill
-                      ?.remainingAmount ||
-                      0
+                    selectedRoom.bill
+                      ?.remainingAmount || 0
                   )}
                 </b>
               </Typography>
             </Card>
           )}
 
+          {/* ---------------------------------------
+              Amount Received
+              Normal text input - NO spinner
+          --------------------------------------- */}
           <TextField
-            type="number"
+            type="text"
             label="Amount Received"
             value={v.amount}
+            placeholder="Enter amount"
+            inputProps={{
+              inputMode: "numeric",
+              pattern: "[0-9]*",
+            }}
             onChange={(e) =>
-              setV({
-                ...v,
-                amount: Number(
-                  e.target.value
-                ),
-              })
+              handleAmountChange(
+                e.target.value
+              )
             }
+            fullWidth
           />
 
+          {/* Payment Date */}
           <TextField
             type="date"
             label="Payment Date"
             InputLabelProps={{
               shrink: true,
             }}
-            value={
-              v.paymentDate
-            }
+            value={v.paymentDate}
             onChange={(e) =>
               setV({
                 ...v,
@@ -501,14 +511,14 @@ export default function Payments() {
                   e.target.value,
               })
             }
+            fullWidth
           />
 
+          {/* Payment Method */}
           <TextField
             select
             label="Payment Method"
-            value={
-              v.paymentMethod
-            }
+            value={v.paymentMethod}
             onChange={(e) =>
               setV({
                 ...v,
@@ -516,6 +526,7 @@ export default function Payments() {
                   e.target.value,
               })
             }
+            fullWidth
           >
             <MenuItem value="cash">
               Cash
@@ -534,6 +545,7 @@ export default function Payments() {
             </MenuItem>
           </TextField>
 
+          {/* Notes */}
           <TextField
             label="Notes"
             multiline
@@ -542,18 +554,17 @@ export default function Payments() {
             onChange={(e) =>
               setV({
                 ...v,
-                notes:
-                  e.target.value,
+                notes: e.target.value,
               })
             }
+            fullWidth
           />
         </DialogContent>
 
+        {/* Dialog Actions */}
         <DialogActions>
           <Button
-            onClick={() =>
-              setOpen(false)
-            }
+            onClick={() => setOpen(false)}
           >
             Cancel
           </Button>
