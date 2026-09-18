@@ -1,6 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import {
+  Suspense,
+  useState,
+} from "react";
+
 import {
   Alert,
   Box,
@@ -11,9 +15,12 @@ import {
   CircularProgress,
 } from "@mui/material";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 
-export default function VerifyEmailPage() {
+function VerifyEmailForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -22,6 +29,7 @@ export default function VerifyEmailPage() {
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
 
@@ -44,32 +52,45 @@ export default function VerifyEmailPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/auth/verify-email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          otp,
-        }),
-      });
+      const response = await fetch(
+        "/api/auth/verify-email",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+            otp,
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        setError(data.message || "Invalid OTP.");
+        setError(
+          data.message || "Invalid OTP."
+        );
         return;
       }
 
-      setSuccess("Email verified successfully. Redirecting to login...");
+      setSuccess(
+        "Email verified successfully. Redirecting to login..."
+      );
 
       setTimeout(() => {
         router.push("/login");
       }, 1200);
     } catch (error) {
-      console.error("VERIFY OTP ERROR:", error);
-      setError("Unable to verify OTP. Please try again.");
+      console.error(
+        "VERIFY OTP ERROR:",
+        error
+      );
+
+      setError(
+        "Unable to verify OTP. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -80,35 +101,52 @@ export default function VerifyEmailPage() {
     setSuccess("");
 
     if (!email) {
-      setError("Email address is missing.");
+      setError(
+        "Email address is missing."
+      );
       return;
     }
 
     setResending(true);
 
     try {
-      const response = await fetch("/api/auth/resend-verification", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-        }),
-      });
+      const response = await fetch(
+        "/api/auth/resend-verification",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        setError(data.message || "Unable to resend OTP.");
+        setError(
+          data.message ||
+            "Unable to resend OTP."
+        );
         return;
       }
 
-      setSuccess("A new OTP has been sent to your email.");
+      setSuccess(
+        "A new OTP has been sent to your email."
+      );
+
       setOtp("");
     } catch (error) {
-      console.error("RESEND OTP ERROR:", error);
-      setError("Unable to resend OTP. Please try again.");
+      console.error(
+        "RESEND OTP ERROR:",
+        error
+      );
+
+      setError(
+        "Unable to resend OTP. Please try again."
+      );
     } finally {
       setResending(false);
     }
@@ -121,7 +159,8 @@ export default function VerifyEmailPage() {
         display: "grid",
         placeItems: "center",
         p: 2,
-        backgroundColor: "background.default",
+        backgroundColor:
+          "background.default",
       }}
     >
       <Paper
@@ -191,9 +230,10 @@ export default function VerifyEmailPage() {
             label="Enter OTP"
             value={otp}
             onChange={(e) => {
-              const value = e.target.value
-                .replace(/\D/g, "")
-                .slice(0, 6);
+              const value =
+                e.target.value
+                  .replace(/\D/g, "")
+                  .slice(0, 6);
 
               setOtp(value);
             }}
@@ -201,6 +241,7 @@ export default function VerifyEmailPage() {
             inputProps={{
               maxLength: 6,
               inputMode: "numeric",
+              pattern: "[0-9]*",
             }}
             fullWidth
             autoFocus
@@ -210,7 +251,10 @@ export default function VerifyEmailPage() {
             type="submit"
             variant="contained"
             size="large"
-            disabled={loading || otp.length !== 6}
+            disabled={
+              loading ||
+              otp.length !== 6
+            }
           >
             {loading ? (
               <>
@@ -246,7 +290,9 @@ export default function VerifyEmailPage() {
             onClick={resendOtp}
             disabled={resending}
           >
-            {resending ? "Sending..." : "Resend OTP"}
+            {resending
+              ? "Sending..."
+              : "Resend OTP"}
           </Button>
         </Box>
 
@@ -259,12 +305,36 @@ export default function VerifyEmailPage() {
           <Button
             variant="text"
             color="inherit"
-            onClick={() => router.push("/login")}
+            onClick={() =>
+              router.push("/login")
+            }
           >
             Back to Login
           </Button>
         </Box>
       </Paper>
     </Box>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense
+      fallback={
+        <Box
+          sx={{
+            minHeight: "100vh",
+            display: "grid",
+            placeItems: "center",
+            backgroundColor:
+              "background.default",
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      }
+    >
+      <VerifyEmailForm />
+    </Suspense>
   );
 }
