@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import {
   Box,
   Button,
@@ -14,10 +15,10 @@ import {
   Typography,
   Grid,
   MenuItem,
-  Chip,
 } from "@mui/material";
 
 import AddIcon from "@mui/icons-material/Add";
+
 import StatusChip from "@/components/StatusChip";
 
 export default function Rooms() {
@@ -29,15 +30,21 @@ export default function Rooms() {
     pgId: "",
     roomNumber: "",
     floor: 1,
-    capacity: 2,
-    monthlyRent: 7000,
-    electricityType: "fixed",
+    capacity: 4,
+    monthlyRent: 10000,
+    electricityType: "meter",
     electricityRate: 8,
     fixedElectricity: 500,
   });
 
   async function load() {
-    setData((await (await fetch("/api/rooms")).json()).data || []);
+    const response = await fetch(
+      "/api/rooms"
+    );
+
+    const result = await response.json();
+
+    setData(result.data || []);
   }
 
   useEffect(() => {
@@ -49,22 +56,37 @@ export default function Rooms() {
   }, []);
 
   async function save() {
-    const r = await fetch("/api/rooms", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(v),
-    });
-
-    const x = await r.json();
-
-    if (!r.ok) {
-      alert(x.message);
-    } else {
-      setOpen(false);
-      load();
+    if (
+      !v.pgId ||
+      !v.roomNumber ||
+      !v.capacity
+    ) {
+      alert(
+        "PG, Room Number and Capacity are required."
+      );
+      return;
     }
+
+    const response = await fetch(
+      "/api/rooms",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(v),
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(result.message);
+      return;
+    }
+
+    setOpen(false);
+    load();
   }
 
   return (
@@ -77,12 +99,16 @@ export default function Rooms() {
         }}
       >
         <Box>
-          <Typography variant="h4" fontWeight={800}>
+          <Typography
+            variant="h4"
+            fontWeight={800}
+          >
             Rooms
           </Typography>
 
           <Typography color="text.secondary">
-            Capacity, rent and occupancy.
+            Manage rooms, occupants, rent and
+            electricity settings.
           </Typography>
         </Box>
 
@@ -99,14 +125,19 @@ export default function Rooms() {
         {data.map((r) => (
           <Grid
             key={r._id}
-            size={{ xs: 12, sm: 6, lg: 4 }}
+            size={{
+              xs: 12,
+              sm: 6,
+              lg: 4,
+            }}
           >
             <Card variant="outlined">
               <CardContent>
                 <Box
                   sx={{
                     display: "flex",
-                    justifyContent: "space-between",
+                    justifyContent:
+                      "space-between",
                   }}
                 >
                   <Typography
@@ -116,26 +147,44 @@ export default function Rooms() {
                     Room {r.roomNumber}
                   </Typography>
 
-                  <StatusChip status={r.status} />
+                  <StatusChip
+                    status={r.status}
+                  />
                 </Box>
 
                 <Typography color="text.secondary">
-                  {r.pgId?.name || "PG"} · Floor {r.floor || "-"}
+                  {r.pgId?.name || "PG"} · Floor{" "}
+                  {r.floor ?? "-"}
                 </Typography>
 
                 <Typography sx={{ mt: 2 }}>
                   Occupancy{" "}
                   <b>
-                    {r.occupied}/{r.capacity}
-                  </b>{" "}
-                  · Rent <b>₹{r.monthlyRent}</b>
+                    {r.occupied || 0}/
+                    {r.capacity}
+                  </b>
+                </Typography>
+
+                <Typography sx={{ mt: 1 }}>
+                  Room Rent{" "}
+                  <b>
+                    ₹{r.monthlyRent || 0}
+                  </b>
                 </Typography>
 
                 <Typography
                   variant="body2"
+                  color="text.secondary"
                   sx={{ mt: 1 }}
                 >
-                  Available beds: {r.availableBeds}
+                  Electricity:{" "}
+                  {r.electricityType ===
+                  "meter"
+                    ? `₹${r.electricityRate || 0}/unit`
+                    : r.electricityType ===
+                      "fixed"
+                    ? `₹${r.fixedElectricity || 0} fixed`
+                    : "Included"}
                 </Typography>
               </CardContent>
             </Card>
@@ -149,7 +198,9 @@ export default function Rooms() {
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Add Room</DialogTitle>
+        <DialogTitle>
+          Add Room
+        </DialogTitle>
 
         <DialogContent
           sx={{
@@ -179,41 +230,70 @@ export default function Rooms() {
             ))}
           </TextField>
 
-          {[
-            "roomNumber",
-            "floor",
-            "capacity",
-            "monthlyRent",
-          ].map((k) => (
-            <TextField
-              key={k}
-              label={k}
-              type={
-                k === "roomNumber"
-                  ? "text"
-                  : "number"
-              }
-              value={v[k]}
-              onChange={(e) =>
-                setV({
-                  ...v,
-                  [k]:
-                    k === "roomNumber"
-                      ? e.target.value
-                      : Number(e.target.value),
-                })
-              }
-            />
-          ))}
+          <TextField
+            label="Room Number"
+            value={v.roomNumber}
+            onChange={(e) =>
+              setV({
+                ...v,
+                roomNumber: e.target.value,
+              })
+            }
+          />
+
+          <TextField
+            label="Floor"
+            type="number"
+            value={v.floor}
+            onChange={(e) =>
+              setV({
+                ...v,
+                floor: Number(
+                  e.target.value
+                ),
+              })
+            }
+          />
+
+          <TextField
+            label="Maximum Occupancy"
+            type="number"
+            value={v.capacity}
+            onChange={(e) =>
+              setV({
+                ...v,
+                capacity: Number(
+                  e.target.value
+                ),
+              })
+            }
+            helperText="Example: 4 students"
+          />
+
+          <TextField
+            label="Room Monthly Rent"
+            type="number"
+            value={v.monthlyRent}
+            onChange={(e) =>
+              setV({
+                ...v,
+                monthlyRent: Number(
+                  e.target.value
+                ),
+              })
+            }
+            helperText="This is the total rent for the room."
+          />
 
           <TextField
             select
-            label="Electricity type"
+            label="Electricity Type"
             value={v.electricityType}
             onChange={(e) =>
               setV({
                 ...v,
-                electricityType: e.target.value,
+                electricityType:
+                  e.target.value,
               })
             }
           >
@@ -230,33 +310,37 @@ export default function Rooms() {
             </MenuItem>
           </TextField>
 
-          {v.electricityType === "fixed" && (
+          {v.electricityType ===
+            "fixed" && (
             <TextField
-              label="Fixed electricity"
+              label="Fixed Electricity"
               type="number"
               value={v.fixedElectricity}
               onChange={(e) =>
                 setV({
                   ...v,
-                  fixedElectricity: Number(
-                    e.target.value
-                  ),
+                  fixedElectricity:
+                    Number(
+                      e.target.value
+                    ),
                 })
               }
             />
           )}
 
-          {v.electricityType === "meter" && (
+          {v.electricityType ===
+            "meter" && (
             <TextField
-              label="Rate per unit"
+              label="Rate Per Unit"
               type="number"
               value={v.electricityRate}
               onChange={(e) =>
                 setV({
                   ...v,
-                  electricityRate: Number(
-                    e.target.value
-                  ),
+                  electricityRate:
+                    Number(
+                      e.target.value
+                    ),
                 })
               }
             />
@@ -264,7 +348,9 @@ export default function Rooms() {
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>
+          <Button
+            onClick={() => setOpen(false)}
+          >
             Cancel
           </Button>
 
@@ -272,7 +358,7 @@ export default function Rooms() {
             variant="contained"
             onClick={save}
           >
-            Save
+            Save Room
           </Button>
         </DialogActions>
       </Dialog>

@@ -1,65 +1,263 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import {
   Box,
   Card,
   CardContent,
   Typography,
   TextField,
-  MenuItem,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
   Button,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider,
 } from "@mui/material";
 
+import RefreshIcon from "@mui/icons-material/Refresh";
+
 import { money } from "@/lib/utils";
-import StatusChip from "@/components/StatusChip";
 
 export default function Billing() {
-  const [students, setStudents] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
+  const today = new Date();
 
-  const d = new Date();
+  const [month, setMonth] =
+    useState(
+      `${today.getFullYear()}-${String(
+        today.getMonth() + 1
+      ).padStart(2, "0")}`
+    );
 
-  const [month, setMonth] = useState(
-    `${d.getFullYear()}-${String(
-      d.getMonth() + 1
-    ).padStart(2, "0")}`
-  );
+  const [rooms, setRooms] =
+    useState<any[]>([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [selectedRoom, setSelectedRoom] =
+    useState<any>(null);
+
+  const [billDialog, setBillDialog] =
+    useState(false);
+
+  const [billValues, setBillValues] =
+    useState({
+      otherCharges: 0,
+      lateFee: 0,
+      securityDepositAmount: 0,
+      dueDate: "",
+      notes: "",
+    });
+
+  async function load() {
+    setLoading(true);
+
+    try {
+      const response = await fetch(
+        `/api/billing?month=${month}`
+      );
+
+      const result =
+        await response.json();
+
+      setRooms(result.data || []);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    fetch("/api/students")
-      .then((r) => r.json())
-      .then((x) => setStudents(x.data || []));
+    load();
+  }, [month]);
 
-    fetch("/api/payments")
-      .then((r) => r.json())
-      .then((x) => setPayments(x.data || []));
-  }, []);
+  async function generateBill(
+    room: any
+  ) {
+    const response = await fetch(
+      "/api/billing",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          roomId: room.room._id,
+          billingMonth: month,
+          ...billValues,
+        }),
+      }
+    );
+
+    const result =
+      await response.json();
+
+    if (!response.ok) {
+      alert(result.message);
+      return;
+    }
+
+    setBillDialog(false);
+
+    setBillValues({
+      otherCharges: 0,
+      lateFee: 0,
+      securityDepositAmount: 0,
+      dueDate: "",
+      notes: "",
+    });
+
+    load();
+  }
+
+  function openBillDialog(room: any) {
+    setSelectedRoom(room);
+
+    setBillDialog(true);
+  }
+
+  const totalDue = rooms.reduce(
+    (sum, r) =>
+      sum +
+      Number(
+        r.bill?.totalAmount || 0
+      ),
+    0
+  );
+
+  const totalPaid = rooms.reduce(
+    (sum, r) =>
+      sum +
+      Number(
+        r.bill?.amountPaid || 0
+      ),
+    0
+  );
+
+  const totalRemaining =
+    rooms.reduce(
+      (sum, r) =>
+        sum +
+        Number(
+          r.bill?.remainingAmount || 0
+        ),
+      0
+    );
 
   return (
     <Box>
-      <Typography variant="h4" fontWeight={800}>
-        Monthly Billing
-      </Typography>
-
-      <Typography
-        color="text.secondary"
-        sx={{ mb: 3 }}
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent:
+            "space-between",
+          alignItems: "flex-start",
+          mb: 3,
+        }}
       >
-        Review one billing cycle and mark amounts collected
-        through Payments.
-      </Typography>
+        <Box>
+          <Typography
+            variant="h4"
+            fontWeight={800}
+          >
+            Smart Rent Management
+          </Typography>
+
+          <Typography color="text.secondary">
+            Manage rent, electricity and
+            payments at room level.
+          </Typography>
+        </Box>
+
+        <Button
+          variant="outlined"
+          startIcon={
+            <RefreshIcon />
+          }
+          onClick={load}
+        >
+          Refresh
+        </Button>
+      </Box>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: {
+            xs: "1fr",
+            sm: "1fr 1fr 1fr",
+          },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <Card variant="outlined">
+          <CardContent>
+            <Typography
+              color="text.secondary"
+            >
+              Total Due
+            </Typography>
+
+            <Typography
+              variant="h5"
+              fontWeight={800}
+            >
+              {money(totalDue)}
+            </Typography>
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined">
+          <CardContent>
+            <Typography
+              color="text.secondary"
+            >
+              Collected
+            </Typography>
+
+            <Typography
+              variant="h5"
+              fontWeight={800}
+            >
+              {money(totalPaid)}
+            </Typography>
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined">
+          <CardContent>
+            <Typography
+              color="text.secondary"
+            >
+              Remaining
+            </Typography>
+
+            <Typography
+              variant="h5"
+              fontWeight={800}
+            >
+              {money(
+                totalRemaining
+              )}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Box>
 
       <Card variant="outlined">
         <CardContent>
           <TextField
             type="month"
-            label="Billing month"
+            label="Billing Month"
             InputLabelProps={{
               shrink: true,
             }}
@@ -67,90 +265,359 @@ export default function Billing() {
             onChange={(e) =>
               setMonth(e.target.value)
             }
-            sx={{ mb: 2 }}
+            sx={{ mb: 3 }}
           />
 
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Student</TableCell>
-                <TableCell>Room</TableCell>
-                <TableCell>Rent</TableCell>
-                <TableCell>Electricity</TableCell>
-                <TableCell>Total</TableCell>
-                <TableCell>Paid</TableCell>
-                <TableCell>Due</TableCell>
-                <TableCell>Status</TableCell>
+                <TableCell>
+                  Room
+                </TableCell>
+
+                <TableCell>
+                  Occupants
+                </TableCell>
+
+                <TableCell>
+                  Rent
+                </TableCell>
+
+                <TableCell>
+                  Electricity
+                </TableCell>
+
+                <TableCell>
+                  Total
+                </TableCell>
+
+                <TableCell>
+                  Paid
+                </TableCell>
+
+                <TableCell>
+                  Due
+                </TableCell>
+
+                <TableCell>
+                  Status
+                </TableCell>
+
+                <TableCell>
+                  Action
+                </TableCell>
               </TableRow>
             </TableHead>
 
             <TableBody>
-              {students.map((s) => {
-                const p = payments.find(
-                  (x) =>
-                    x.studentId?._id === s._id &&
-                    x.billingMonth === month
-                );
-
-                const total =
-                  p?.totalAmount || s.monthlyRent;
-
-                const paid = p?.amountPaid || 0;
+              {rooms.map((r) => {
+                const bill =
+                  r.bill;
 
                 return (
-                  <TableRow key={s._id}>
+                  <TableRow
+                    key={
+                      r.room._id
+                    }
+                  >
                     <TableCell>
-                      {s.name}
-                    </TableCell>
-
-                    <TableCell>
-                      {s.roomId?.roomNumber}
-                    </TableCell>
-
-                    <TableCell>
-                      {money(
-                        p?.rentAmount ||
-                          s.monthlyRent
-                      )}
-                    </TableCell>
-
-                    <TableCell>
-                      {money(
-                        p?.electricityAmount || 0
-                      )}
-                    </TableCell>
-
-                    <TableCell>
-                      {money(total)}
-                    </TableCell>
-
-                    <TableCell>
-                      {money(paid)}
-                    </TableCell>
-
-                    <TableCell>
-                      {money(
-                        Math.max(
-                          total - paid,
-                          0
-                        )
-                      )}
-                    </TableCell>
-
-                    <TableCell>
-                      <StatusChip
-                        status={
-                          p?.status || "pending"
+                      <Typography fontWeight={700}>
+                        Room{" "}
+                        {
+                          r.room
+                            .roomNumber
                         }
-                      />
+                      </Typography>
+
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                      >
+                        {
+                          r.pg?.name
+                        }
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography fontWeight={600}>
+                        {
+                          r.occupants
+                            .length
+                        }{" "}
+                        students
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      {money(
+                        bill?.rentAmount ||
+                          r.room
+                            .monthlyRent ||
+                          0
+                      )}
+                    </TableCell>
+
+                    <TableCell>
+                      {money(
+                        bill?.electricityAmount ||
+                          r.electricity
+                            ?.amount ||
+                          0
+                      )}
+                    </TableCell>
+
+                    <TableCell>
+                      {bill
+                        ? money(
+                            bill.totalAmount
+                          )
+                        : "-"}
+                    </TableCell>
+
+                    <TableCell>
+                      {bill
+                        ? money(
+                            bill.amountPaid
+                          )
+                        : "-"}
+                    </TableCell>
+
+                    <TableCell>
+                      {bill
+                        ? money(
+                            bill.remainingAmount
+                          )
+                        : "-"}
+                    </TableCell>
+
+                    <TableCell>
+                      {bill ? (
+                        <Chip
+                          size="small"
+                          label={
+                            bill.status
+                          }
+                        />
+                      ) : (
+                        <Chip
+                          size="small"
+                          label="Not Generated"
+                        />
+                      )}
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() =>
+                          openBillDialog(
+                            r
+                          )
+                        }
+                      >
+                        {bill
+                          ? "Update Bill"
+                          : "Generate Bill"}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
               })}
+
+              {!loading &&
+                rooms.length ===
+                  0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={9}
+                      align="center"
+                    >
+                      No occupied rooms
+                      found.
+                    </TableCell>
+                  </TableRow>
+                )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={billDialog}
+        onClose={() =>
+          setBillDialog(false)
+        }
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {selectedRoom
+            ? `Room ${selectedRoom.room.roomNumber} Bill`
+            : "Generate Bill"}
+        </DialogTitle>
+
+        <DialogContent
+          sx={{
+            display: "grid",
+            gap: 2,
+            pt: 2,
+          }}
+        >
+          {selectedRoom && (
+            <>
+              <Box>
+                <Typography
+                  color="text.secondary"
+                >
+                  Occupants
+                </Typography>
+
+                <Typography fontWeight={700}>
+                  {selectedRoom.occupants
+                    .map(
+                      (s: any) =>
+                        s.name
+                    )
+                    .join(", ")}
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              <Typography>
+                Room Rent:{" "}
+                <b>
+                  {money(
+                    selectedRoom
+                      .room
+                      .monthlyRent
+                  )}
+                </b>
+              </Typography>
+
+              <Typography>
+                Electricity:{" "}
+                <b>
+                  {money(
+                    selectedRoom
+                      .electricity
+                      ?.amount ||
+                      0
+                  )}
+                </b>
+              </Typography>
+            </>
+          )}
+
+          <TextField
+            type="number"
+            label="Other Charges"
+            value={
+              billValues.otherCharges
+            }
+            onChange={(e) =>
+              setBillValues({
+                ...billValues,
+                otherCharges:
+                  Number(
+                    e.target.value
+                  ),
+              })
+            }
+          />
+
+          <TextField
+            type="number"
+            label="Late Fee"
+            value={
+              billValues.lateFee
+            }
+            onChange={(e) =>
+              setBillValues({
+                ...billValues,
+                lateFee:
+                  Number(
+                    e.target.value
+                  ),
+              })
+            }
+          />
+
+          <TextField
+            type="number"
+            label="Security Deposit"
+            value={
+              billValues.securityDepositAmount
+            }
+            onChange={(e) =>
+              setBillValues({
+                ...billValues,
+                securityDepositAmount:
+                  Number(
+                    e.target.value
+                  ),
+              })
+            }
+          />
+
+          <TextField
+            type="date"
+            label="Due Date"
+            InputLabelProps={{
+              shrink: true,
+            }}
+            value={
+              billValues.dueDate
+            }
+            onChange={(e) =>
+              setBillValues({
+                ...billValues,
+                dueDate:
+                  e.target.value,
+              })
+            }
+          />
+
+          <TextField
+            label="Notes"
+            multiline
+            rows={3}
+            value={
+              billValues.notes
+            }
+            onChange={(e) =>
+              setBillValues({
+                ...billValues,
+                notes:
+                  e.target.value,
+              })
+            }
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            onClick={() =>
+              setBillDialog(false)
+            }
+          >
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={() =>
+              generateBill(
+                selectedRoom
+              )
+            }
+          >
+            Generate Bill
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

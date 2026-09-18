@@ -1,6 +1,6 @@
 import mongoose, { Schema, models } from "mongoose";
 
-const ElectricitySchema = new Schema(
+const BillSchema = new Schema(
   {
     ownerId: {
       type: Schema.Types.ObjectId,
@@ -29,39 +29,65 @@ const ElectricitySchema = new Schema(
       index: true,
     },
 
-    previousReading: {
+    rentAmount: {
       type: Number,
       default: 0,
-      min: 0,
     },
 
-    currentReading: {
+    electricityAmount: {
       type: Number,
       default: 0,
-      min: 0,
     },
 
-    unitsUsed: {
+    otherCharges: {
       type: Number,
       default: 0,
-      min: 0,
     },
 
-    ratePerUnit: {
+    lateFee: {
       type: Number,
       default: 0,
-      min: 0,
     },
 
-    amount: {
+    securityDepositAmount: {
       type: Number,
       default: 0,
-      min: 0,
     },
 
-    overridden: {
-      type: Boolean,
-      default: false,
+    totalAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    amountPaid: {
+      type: Number,
+      default: 0,
+    },
+
+    remainingAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    dueDate: {
+      type: Date,
+      default: null,
+    },
+
+    status: {
+      type: String,
+      enum: [
+        "pending",
+        "partial",
+        "completed",
+        "overdue",
+      ],
+      default: "pending",
+    },
+
+    notes: {
+      type: String,
+      default: "",
     },
   },
   {
@@ -69,7 +95,7 @@ const ElectricitySchema = new Schema(
   }
 );
 
-ElectricitySchema.index(
+BillSchema.index(
   {
     ownerId: 1,
     roomId: 1,
@@ -80,8 +106,5 @@ ElectricitySchema.index(
   }
 );
 
-export default models.ElectricityReading ||
-  mongoose.model(
-    "ElectricityReading",
-    ElectricitySchema
-  );
+export default models.Bill ||
+  mongoose.model("Bill", BillSchema);

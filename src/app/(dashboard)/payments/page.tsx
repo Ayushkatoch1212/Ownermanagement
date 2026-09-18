@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import {
   Box,
   Button,
@@ -21,80 +22,176 @@ import {
 } from "@mui/material";
 
 import AddIcon from "@mui/icons-material/Add";
+
 import { money } from "@/lib/utils";
-import StatusChip from "@/components/StatusChip";
 
 export default function Payments() {
-  const [data, setData] = useState<any[]>([]);
-  const [students, setStudents] = useState<any[]>([]);
-  const [open, setOpen] = useState(false);
-
   const now = new Date();
 
+  const [data, setData] =
+    useState<any[]>([]);
+
+  const [billingData, setBillingData] =
+    useState<any[]>([]);
+
+  const [open, setOpen] =
+    useState(false);
+
+  const [month, setMonth] =
+    useState(
+      `${now.getFullYear()}-${String(
+        now.getMonth() + 1
+      ).padStart(2, "0")}`
+    );
+
   const [v, setV] = useState<any>({
-    studentId: "",
-    pgId: "",
-    billingMonth: `${now.getFullYear()}-${String(
-      now.getMonth() + 1
-    ).padStart(2, "0")}`,
-    rentAmount: 0,
-    electricityAmount: 0,
-    otherCharges: 0,
-    lateFee: 0,
-    securityDepositAmount: 0,
-    amountPaid: 0,
+    roomId: "",
+    billId: "",
+    amount: 0,
     paymentMethod: "cash",
+    paymentDate: now
+      .toISOString()
+      .slice(0, 10),
     notes: "",
   });
 
-  async function load() {
-    setData(
-      (await (await fetch("/api/payments")).json()).data || []
+  async function loadPayments() {
+    const response = await fetch(
+      `/api/payments?billingMonth=${month}`
     );
+
+    const result =
+      await response.json();
+
+    setData(result.data || []);
+  }
+
+  async function loadBilling() {
+    const response = await fetch(
+      `/api/billing?month=${month}`
+    );
+
+    const result =
+      await response.json();
+
+    setBillingData(
+      result.data || []
+    );
+  }
+
+  async function load() {
+    await Promise.all([
+      loadPayments(),
+      loadBilling(),
+    ]);
   }
 
   useEffect(() => {
     load();
+  }, [month]);
 
-    fetch("/api/students")
-      .then((r) => r.json())
-      .then((x) => setStudents(x.data || []));
-  }, []);
-
-  const student = students.find(
-    (s) => s._id === v.studentId
-  );
+  const selectedRoom =
+    billingData.find(
+      (x) =>
+        x.room._id === v.roomId
+    );
 
   async function save() {
-    const payload = {
-      ...v,
-      pgId: student?.pgId?._id || student?.pgId,
-      rentAmount: Number(v.rentAmount),
-      electricityAmount: Number(v.electricityAmount),
-      otherCharges: Number(v.otherCharges),
-      lateFee: Number(v.lateFee),
-      securityDepositAmount: Number(
-        v.securityDepositAmount
-      ),
-      amountPaid: Number(v.amountPaid),
-    };
+    if (!v.roomId) {
+      alert("Select a room.");
+      return;
+    }
 
-    const r = await fetch("/api/payments", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+    if (!v.billId) {
+      alert(
+        "Generate the bill for this room first."
+      );
+      return;
+    }
+
+    if (Number(v.amount) <= 0) {
+      alert(
+        "Enter a valid payment amount."
+      );
+      return;
+    }
+
+    if (
+      selectedRoom?.bill &&
+      Number(v.amount) >
+        Number(
+          selectedRoom.bill
+            .remainingAmount
+        )
+    ) {
+      alert(
+        `Maximum payable amount is ${money(
+          selectedRoom.bill
+            .remainingAmount
+        )}`
+      );
+      return;
+    }
+
+    const response = await fetch(
+      "/api/payments",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          roomId: v.roomId,
+          billId: v.billId,
+          billingMonth: month,
+          amount: Number(v.amount),
+          paymentMethod:
+            v.paymentMethod,
+          paymentDate:
+            v.paymentDate,
+          notes: v.notes,
+        }),
+      }
+    );
+
+    const result =
+      await response.json();
+
+    if (!response.ok) {
+      alert(result.message);
+      return;
+    }
+
+    setOpen(false);
+
+    setV({
+      roomId: "",
+      billId: "",
+      amount: 0,
+      paymentMethod: "cash",
+      paymentDate: now
+        .toISOString()
+        .slice(0, 10),
+      notes: "",
     });
 
-    const x = await r.json();
+    load();
+  }
 
-    if (!r.ok) {
-      alert(x.message);
-    } else {
-      setOpen(false);
-      load();
-    }
+  function openPaymentDialog() {
+    setV({
+      roomId: "",
+      billId: "",
+      amount: 0,
+      paymentMethod: "cash",
+      paymentDate: new Date()
+        .toISOString()
+        .slice(0, 10),
+      notes: "",
+    });
+
+    setOpen(true);
   }
 
   return (
@@ -102,24 +199,33 @@ export default function Payments() {
       <Box
         sx={{
           display: "flex",
-          justifyContent: "space-between",
+          justifyContent:
+            "space-between",
           mb: 3,
         }}
       >
         <Box>
-          <Typography variant="h4" fontWeight={800}>
-            Payments
+          <Typography
+            variant="h4"
+            fontWeight={800}
+          >
+            Room Payments
           </Typography>
 
           <Typography color="text.secondary">
-            Record payments manually. No payment gateway.
+            Record payments against a
+            room's monthly bill.
           </Typography>
         </Box>
 
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setOpen(true)}
+          startIcon={
+            <AddIcon />
+          }
+          onClick={
+            openPaymentDialog
+          }
         >
           Record Payment
         </Button>
@@ -127,46 +233,97 @@ export default function Payments() {
 
       <Card variant="outlined">
         <CardContent>
+          <TextField
+            type="month"
+            label="Billing Month"
+            InputLabelProps={{
+              shrink: true,
+            }}
+            value={month}
+            onChange={(e) =>
+              setMonth(
+                e.target.value
+              )
+            }
+            sx={{ mb: 3 }}
+          />
+
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Student</TableCell>
-                <TableCell>Month</TableCell>
-                <TableCell>Total</TableCell>
-                <TableCell>Paid</TableCell>
-                <TableCell>Due</TableCell>
-                <TableCell>Status</TableCell>
+                <TableCell>
+                  Room
+                </TableCell>
+
+                <TableCell>
+                  Payment Date
+                </TableCell>
+
+                <TableCell>
+                  Amount
+                </TableCell>
+
+                <TableCell>
+                  Method
+                </TableCell>
+
+                <TableCell>
+                  Notes
+                </TableCell>
               </TableRow>
             </TableHead>
 
             <TableBody>
               {data.map((p) => (
-                <TableRow key={p._id}>
+                <TableRow
+                  key={p._id}
+                >
                   <TableCell>
-                    {p.studentId?.name}
+                    Room{" "}
+                    {
+                      p.roomId
+                        ?.roomNumber
+                    }
                   </TableCell>
 
                   <TableCell>
-                    {p.billingMonth}
+                    {p.paymentDate
+                      ? new Date(
+                          p.paymentDate
+                        ).toLocaleDateString(
+                          "en-IN"
+                        )
+                      : "-"}
                   </TableCell>
 
                   <TableCell>
-                    {money(p.totalAmount)}
+                    {money(
+                      p.amount
+                    )}
                   </TableCell>
 
                   <TableCell>
-                    {money(p.amountPaid)}
+                    {p.paymentMethod}
                   </TableCell>
 
                   <TableCell>
-                    {money(p.remainingAmount)}
-                  </TableCell>
-
-                  <TableCell>
-                    <StatusChip status={p.status} />
+                    {p.notes || "-"}
                   </TableCell>
                 </TableRow>
               ))}
+
+              {data.length ===
+                0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    align="center"
+                  >
+                    No payments found
+                    for this month.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -174,12 +331,14 @@ export default function Payments() {
 
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() =>
+          setOpen(false)
+        }
         fullWidth
         maxWidth="sm"
       >
         <DialogTitle>
-          Record Monthly Payment
+          Record Room Payment
         </DialogTitle>
 
         <DialogContent
@@ -191,102 +350,211 @@ export default function Payments() {
         >
           <TextField
             select
-            label="Student"
-            value={v.studentId}
+            label="Room"
+            value={v.roomId}
             onChange={(e) => {
-              const st = students.find(
-                (s) => s._id === e.target.value
-              );
+              const room =
+                billingData.find(
+                  (x) =>
+                    x.room._id ===
+                    e.target.value
+                );
 
               setV({
                 ...v,
-                studentId: e.target.value,
-                pgId:
-                  st?.pgId?._id || st?.pgId,
-                rentAmount: st?.monthlyRent || 0,
+                roomId:
+                  e.target.value,
+                billId:
+                  room?.bill?._id ||
+                  "",
+                amount: 0,
               });
             }}
           >
-            {students.map((s) => (
-              <MenuItem
-                key={s._id}
-                value={s._id}
-              >
-                {s.name} · Room{" "}
-                {s.roomId?.roomNumber}
-              </MenuItem>
-            ))}
+            {billingData.map(
+              (r) => (
+                <MenuItem
+                  key={
+                    r.room._id
+                  }
+                  value={
+                    r.room._id
+                  }
+                  disabled={
+                    !r.bill ||
+                    Number(
+                      r.bill
+                        .remainingAmount
+                    ) <= 0
+                  }
+                >
+                  Room{" "}
+                  {
+                    r.room
+                      .roomNumber
+                  }{" "}
+                  · Due{" "}
+                  {money(
+                    r.bill
+                      ?.remainingAmount ||
+                      0
+                  )}
+                </MenuItem>
+              )
+            )}
           </TextField>
 
+          {selectedRoom && (
+            <Card
+              variant="outlined"
+              sx={{ p: 2 }}
+            >
+              <Typography>
+                Room Rent:{" "}
+                <b>
+                  {money(
+                    selectedRoom
+                      .bill
+                      ?.rentAmount ||
+                      0
+                  )}
+                </b>
+              </Typography>
+
+              <Typography>
+                Electricity:{" "}
+                <b>
+                  {money(
+                    selectedRoom
+                      .bill
+                      ?.electricityAmount ||
+                      0
+                  )}
+                </b>
+              </Typography>
+
+              <Typography>
+                Total:{" "}
+                <b>
+                  {money(
+                    selectedRoom
+                      .bill
+                      ?.totalAmount ||
+                      0
+                  )}
+                </b>
+              </Typography>
+
+              <Typography>
+                Paid:{" "}
+                <b>
+                  {money(
+                    selectedRoom
+                      .bill
+                      ?.amountPaid ||
+                      0
+                  )}
+                </b>
+              </Typography>
+
+              <Typography>
+                Remaining:{" "}
+                <b>
+                  {money(
+                    selectedRoom
+                      .bill
+                      ?.remainingAmount ||
+                      0
+                  )}
+                </b>
+              </Typography>
+            </Card>
+          )}
+
           <TextField
-            type="month"
-            label="Billing month"
-            InputLabelProps={{
-              shrink: true,
-            }}
-            value={v.billingMonth}
+            type="number"
+            label="Amount Received"
+            value={v.amount}
             onChange={(e) =>
               setV({
                 ...v,
-                billingMonth: e.target.value,
+                amount: Number(
+                  e.target.value
+                ),
               })
             }
           />
 
-          {[
-            ["rentAmount", "Rent"],
-            ["electricityAmount", "Electricity"],
-            ["otherCharges", "Other charges"],
-            ["lateFee", "Late fee"],
-            [
-              "securityDepositAmount",
-              "Security deposit",
-            ],
-            ["amountPaid", "Amount paid"],
-          ].map(([k, l]) => (
-            <TextField
-              key={k}
-              type="number"
-              label={l}
-              value={v[k]}
-              onChange={(e) =>
-                setV({
-                  ...v,
-                  [k]: Number(e.target.value),
-                })
-              }
-            />
-          ))}
-
           <TextField
-            select
-            label="Payment method"
-            value={v.paymentMethod}
+            type="date"
+            label="Payment Date"
+            InputLabelProps={{
+              shrink: true,
+            }}
+            value={
+              v.paymentDate
+            }
             onChange={(e) =>
               setV({
                 ...v,
-                paymentMethod: e.target.value,
+                paymentDate:
+                  e.target.value,
+              })
+            }
+          />
+
+          <TextField
+            select
+            label="Payment Method"
+            value={
+              v.paymentMethod
+            }
+            onChange={(e) =>
+              setV({
+                ...v,
+                paymentMethod:
+                  e.target.value,
               })
             }
           >
-            {[
-              "cash",
-              "upi",
-              "bank_transfer",
-              "other",
-            ].map((x) => (
-              <MenuItem
-                key={x}
-                value={x}
-              >
-                {x}
-              </MenuItem>
-            ))}
+            <MenuItem value="cash">
+              Cash
+            </MenuItem>
+
+            <MenuItem value="upi">
+              UPI
+            </MenuItem>
+
+            <MenuItem value="bank_transfer">
+              Bank Transfer
+            </MenuItem>
+
+            <MenuItem value="other">
+              Other
+            </MenuItem>
           </TextField>
+
+          <TextField
+            label="Notes"
+            multiline
+            rows={2}
+            value={v.notes}
+            onChange={(e) =>
+              setV({
+                ...v,
+                notes:
+                  e.target.value,
+              })
+            }
+          />
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>
+          <Button
+            onClick={() =>
+              setOpen(false)
+            }
+          >
             Cancel
           </Button>
 
